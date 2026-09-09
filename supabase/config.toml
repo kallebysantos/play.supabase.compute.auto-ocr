@@ -1,0 +1,13 @@
+project_id = "ocr-markdown"
+
+# [db.vault]
+# secret_key = "env(SECRET_VALUE)"
+
+[db.migrations]
+enabled = true
+schema_paths = ["./schemas/*.sql"]
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
