@@ -11,3 +11,7 @@ schema_paths = ["./schemas/*.sql"]
 enabled = true
 sql_paths = ["./seed.sql"]
 
+[workers.ocr-worker]
+runtime = "dockerfile"
+size = "4gb"
+exposure = "private"
