@@ -1,30 +1,44 @@
-FROM python:3.9-slim
+FROM ghcr.io/ggml-org/llama.cpp:server AS llama
 
-# System deps required by paddlepaddle / opencv / pdf rasterization
-RUN apt-get update && apt-get install -y --no-install-recommends \
-  libgomp1 \
-  libgl1 \
-  libglib2.0-0 \
-  poppler-utils \
-  curl \
-  && rm -rf /var/lib/apt/lists/*
+
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+  PYTHONUNBUFFERED=1 \
+  PIP_NO_CACHE_DIR=1 \
+  PYTHONIOENCODING=UTF-8 \
+  TOKENIZERS_PARALLELISM=false \
+  TORCH_DEVICE=cpu \
+  LLAMA_CPP_BINARY=/usr/local/bin/llama-server
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt "paddlex[ocr]"
 
-# Bake PP-StructureV3 model weights into the image so containers don't
-# re-download them on every cold start. This runs the pipeline's __init__,
-# which triggers PaddleX to fetch and cache the sub-models under ~/.paddlex.
-RUN python -c "from paddleocr import PPStructureV3; PPStructureV3()"
+# Runtime/system dependencies commonly needed by Marker/PDF processing
+# RUN apt-get update \
+#   && apt-get install -y --no-install-recommends \
+#   libglib2.0-0 \
+#   libgl1 \
+#   libgomp1 \
+#   libsm6 \
+#   libxext6 \
+#   libxrender1 \
+#   poppler-utils \
+#   ca-certificates \
+#   && rm -rf /var/lib/apt/lists/*
 
-COPY main.py .
+COPY --from=llama /app/llama-server /usr/local/bin/llama-server
+COPY --from=llama /app/*.so* /usr/local/lib/llama/
+RUN chmod +x /usr/local/bin/llama-server \
+  && /usr/local/bin/llama-server --version
 
-# Required at runtime, passed in via your platform's secrets/env config,
-# not baked into the image:
-#   SUPABASE_URL
-#   SUPABASE_SERVICE_ROLE_KEY
-#   SUPABASE_DB_URL
+# Application dependencies
+#COPY requirements.txt requirements.txt
+RUN pip install supabase psycopg2-binary marker-pdf pillow
 
-ENTRYPOINT ["python", "main.py"]
+# Model/cache directory
+# RUN mkdir -p /models/huggingface
+
+COPY main.py main.py
+
+CMD ["python", "-u", "/app/main.py"]
