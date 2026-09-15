@@ -16,11 +16,9 @@ OCR_WORKER_QUEUE_NAME = os.environ.get("OCR_WORKER_QUEUE_NAME ", "ocr_processing
 supabase = create_client(SUPABASE_URL, SECRET_KEY)
 ocr_service = OCR(converter=init_converter())
 
-print("worker init")
-
 
 async def process_document(document_id: str):
-    print("Processing Document", document_id)
+    print("Worker: fetching document", document_id)
 
     document = (
         supabase.table("documents")
@@ -37,18 +35,17 @@ async def process_document(document_id: str):
     if storage_path is None:
         return
 
-    print("generating public URL:", storage_path)
-
     download_stream = supabase.storage.from_("documents").download(storage_path)
-    print("Download: ocr", len(download_stream))
+    print("Worker: downloaded document bytes", len(download_stream), document_id)
 
+    print("Worker: processing document", document_id)
     result = ocr_service.from_stream(download_stream)
 
-    print("Processed pages:", len(result.pages))
+    print("Worker: processed document pages", len(result.pages), document_id)
 
-    markdown = result.export_as_markdown()
-    print("Result: markdown ")
+    markdown = result.document.export_to_markdown(image_placeholder="")
 
+    print("Worker: saving markdown sections", document_id)
     saved = (
         supabase.table("document_sections")
         .insert(
@@ -63,11 +60,11 @@ async def process_document(document_id: str):
         .execute()
     )
 
-    print("Result: Saved ", saved)
+    print("Worker: saved sections", len(saved.data), document_id)
 
 
 async def main():
-    print("worker started")
+    print("Worker: started")
     queue = PGMQueue(
         host=os.environ["OCR_WORKER_PG_HOST"],
         port=os.environ["OCR_WORKER_PG_PORT"],
@@ -76,16 +73,12 @@ async def main():
         password=os.environ["OCR_WORKER_PG_PASS"],
     )
     await queue.init()
-    print("worker QUEUE init")
 
-    print("LOOP worker started, polling queue:", OCR_WORKER_QUEUE_NAME)
+    print("Worker: polling queue:", OCR_WORKER_QUEUE_NAME)
     while True:
         try:
-            messages = await queue.read_with_poll(
-                OCR_WORKER_QUEUE_NAME,
-            )
+            messages = await queue.read_with_poll(OCR_WORKER_QUEUE_NAME, vt=60)
 
-            print(f"received: {messages}", flush=True)
             if messages is None:
                 continue
 
@@ -94,11 +87,11 @@ async def main():
                 if document_id is None:
                     continue
 
-                print("received ", document_id)
+                print("Worker: received ", document_id)
                 await process_document(document_id)
 
                 achived = await queue.archive(OCR_WORKER_QUEUE_NAME, msg.msg_id)
-                print("MSG archived", achived)
+                print("Worker: archived", achived, document_id)
 
         except Exception as exc:
             import traceback
@@ -106,10 +99,10 @@ async def main():
             print("Exception", exc)
             traceback.print_exc()
 
-        print("Sleep")
         await asyncio.sleep(1)
 
 
 # Run the main function
 if __name__ == "__main__":
+    print("Worker: loaded")
     asyncio.run(main())

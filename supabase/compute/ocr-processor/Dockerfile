@@ -7,17 +7,17 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 #COPY requirements.txt .
-RUN pip install fastapi uvicorn supabase  'pgmq[async]<1.1'  PyMuPDF numpy
-RUN pip install "python-doctr" --extra-index-url https://download.pytorch.org/whl/cpu
-# RUN pip install docling --extra-index-url https://download.pytorch.org/whl/cpu
+RUN pip install fastapi uvicorn supabase  'pgmq[async]<1.1'
+# RUN pip install  PyMuPDF numpy "python-doctr" --extra-index-url https://download.pytorch.org/whl/cpu
+RUN pip install docling --extra-index-url https://download.pytorch.org/whl/cpu
 
 ENV HF_HOME=/tmp/
 ENV TORCH_HOME=/tmp/
 
-# RUN docling-tools models download
+RUN docling-tools models download
 
-# ENV OMP_NUM_THREADS=4
-# ENV DOCLING_ARTIFACTS_PATH=/root/.cache/docling/models
+ENV OMP_NUM_THREADS=4
+ENV DOCLING_ARTIFACTS_PATH=/root/.cache/docling/models
 
 COPY . .
 

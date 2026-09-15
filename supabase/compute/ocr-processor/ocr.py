@@ -1,41 +1,34 @@
-from doctr.io import Document, DocumentFile
-from doctr.models import ocr_predictor
-from doctr.models.predictor import OCRPredictor
+from io import BytesIO
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling_core.types.io import DocumentStream
 
 
 def init_converter():
-    # from docling.document_converter import DocumentConverter
-    # converter = DocumentConverter()
-    # return converter
-
-    converter = ocr_predictor(
-        det_arch="db_mobilenet_v3_large",
-        reco_arch="crnn_mobilenet_v3_small",
-        pretrained=True,
-        keep_reading_order=True,
+    converter = DocumentConverter(
+        allowed_formats=[InputFormat.PDF],
+        format_options={
+            InputFormat.PDF: PdfFormatOption(
+                pipeline_options=PdfPipelineOptions(
+                    generate_page_images=False, generate_picture_images=False
+                )
+            ),
+        },
     )
+
+    converter.initialize_pipeline(InputFormat.PDF)
 
     return converter
 
 
 class OCR:
-    def __init__(self, converter: OCRPredictor):
+    def __init__(self, converter: DocumentConverter):
         self.converter = converter
 
-    # def from_url(self, source: str):
-    #     print("ocr: started", source)
-    #     result: Document = self.converter(source)
-
-    #     print("ocr: finished", source)
-    #     return result.render()
-
     def from_stream(self, stream: bytes):
-        print("ocr: started")
-
-        file = DocumentFile.from_pdf(stream)
-        print("ocr: file", len(file))
-
-        result: Document = self.converter(file)
-        print("ocr: result finished")
+        bytes_stream = BytesIO(stream)
+        doc_stream = DocumentStream(name="file.pdf", stream=bytes_stream)
+        result = self.converter.convert(doc_stream)
 
         return result
