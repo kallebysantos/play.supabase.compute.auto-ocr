@@ -1,4 +1,4 @@
-project_id = "ocr-markdown"
+project_id = "auto-ocr"
 
 # [db.vault]
 # secret_key = "env(SECRET_VALUE)"
