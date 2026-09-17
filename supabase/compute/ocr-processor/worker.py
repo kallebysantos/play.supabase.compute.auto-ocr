@@ -1,4 +1,5 @@
 import asyncio
+import time
 import os
 import json
 
@@ -11,7 +12,7 @@ SUPABASE_URL = os.environ["SUPABASE_URL"]
 SECRET_KEY = json.loads(os.environ["SUPABASE_SECRET_KEYS"])["default"]
 
 OCR_WORKER_DOCUMENTS_BUCKET = os.environ.get("OCR_WORKER_DOCUMENTS_BUCKET", "documents")
-OCR_WORKER_QUEUE_NAME = os.environ.get("OCR_WORKER_QUEUE_NAME ", "ocr_processing")
+OCR_WORKER_QUEUE_NAME = os.environ.get("OCR_WORKER_QUEUE_NAME ", "documents")
 
 supabase = create_client(SUPABASE_URL, SECRET_KEY)
 ocr_service = OCR(converter=init_converter())
@@ -21,8 +22,8 @@ async def process_document(document_id: str):
     print("Worker: fetching document", document_id)
 
     document = (
-        supabase.table("documents")
-        .select("storage_path")
+        supabase.from_("documents_with_storage_path")
+        .select("storage_object_path")
         .eq("id", document_id)
         .maybe_single()
         .execute()
@@ -31,7 +32,7 @@ async def process_document(document_id: str):
     if document is None:
         return
 
-    storage_path = document.data["storage_path"]
+    storage_path: str | None = document.data["storage_object_path"]
     if storage_path is None:
         return
 
@@ -39,9 +40,13 @@ async def process_document(document_id: str):
     print("Worker: downloaded document bytes", len(download_stream), document_id)
 
     print("Worker: processing document", document_id)
+    start_ts = time.perf_counter()
     result = ocr_service.from_stream(download_stream)
 
-    print("Worker: processed document pages", len(result.pages), document_id)
+    print(
+        f"Worker: processed document {time.perf_counter() - start_ts:.2f}s - {len(result.pages)} pages",
+        document_id,
+    )
 
     markdown = result.document.export_to_markdown(image_placeholder="")
 
@@ -53,7 +58,6 @@ async def process_document(document_id: str):
                 "document_id": document_id,
                 "page_number": 0,
                 "section_index": 0,
-                "type": "other",
                 "content": markdown,
             }
         )
@@ -77,7 +81,7 @@ async def main():
     print("Worker: polling queue:", OCR_WORKER_QUEUE_NAME)
     while True:
         try:
-            messages = await queue.read_with_poll(OCR_WORKER_QUEUE_NAME, vt=60)
+            messages = await queue.read_with_poll(OCR_WORKER_QUEUE_NAME, vt=120)
 
             if messages is None:
                 continue

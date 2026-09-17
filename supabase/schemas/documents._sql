@@ -1,0 +1,36 @@
+
+
+
+-- storage
+insert into storage.buckets (id, name, public)
+values ('documents', 'documents', false)
+on conflict do nothing;
+
+create or replace function handle_document_upload()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, storage, pgmq
+as $$
+declare
+  v_document_id uuid;
+begin
+  insert into public.documents (storage_object_id, storage_path, original_filename)
+  values (
+    new.id,
+    new.name,
+    split_part(new.name, '/', -1)   -- last path segment = filename
+  )
+  returning id into v_document_id;
+
+  perform pgmq.send('ocr_processing', jsonb_build_object('document_id', v_document_id));
+
+  return new;
+end;
+$$;
+
+create trigger on_document_uploaded
+after insert on storage.objects
+for each row
+when (new.bucket_id = 'documents')
+execute function handle_document_upload();

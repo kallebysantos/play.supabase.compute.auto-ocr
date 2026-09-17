@@ -5,13 +5,25 @@ project_id = "ocr-markdown"
 
 [db.migrations]
 enabled = true
-schema_paths = ["./schemas/*.sql"]
+schema_paths = [
+  "./schemas/_init.sql",
+  "./schemas/*.sql",
+  "./schemas/documents/*.sql",
+]
 
 [db.seed]
 enabled = true
 sql_paths = ["./seed.sql"]
 
-[workers.ocr-worker]
+[experimental]
+compute = true
+
+[compute.docling-ocr]
 runtime = "dockerfile"
 size = "4gb"
-exposure = "private"
+exposure = "public"
+
+[compute.ocr-processor]
+runtime = "dockerfile"
+size = "4gb"
+exposure = "public"

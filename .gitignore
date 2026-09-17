@@ -3,3 +3,6 @@ node_modules
 .env
 .temp
 .branches
+__pycache__
+.DS_Store
+dist
