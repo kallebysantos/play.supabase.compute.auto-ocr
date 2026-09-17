@@ -18,12 +18,7 @@ sql_paths = ["./seed.sql"]
 [experimental]
 compute = true
 
-[compute.docling-ocr]
-runtime = "dockerfile"
-size = "4gb"
-exposure = "public"
-
 [compute.ocr-processor]
 runtime = "dockerfile"
 size = "4gb"
-exposure = "public"
+exposure = "private"
